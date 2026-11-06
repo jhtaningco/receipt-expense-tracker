@@ -1,0 +1,488 @@
+{
+  "name": "Receipt Expense Tracker",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "labelIds": [
+            "Label_2207386473723654486"
+          ]
+        },
+        "options": {
+          "dataPropertyAttachmentsPrefixName": "attachment_",
+          "downloadAttachments": true
+        }
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "0c892337-240c-4b00-b4b7-f450de4d2940",
+      "name": "Gmail Trigger",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "aMAYtG7Jyxbl3kYY",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "5d4dee99-e053-489c-a7c4-558b58ced08f",
+              "leftValue": "={{ Object.keys($binary || {}).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        224,
+        0
+      ],
+      "id": "7e0d882b-aebb-49cb-978a-76ae18a2b3a0",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-flash-latest",
+          "mode": "list",
+          "cachedResultName": "Gemini Flash Latest"
+        },
+        "text": "You are reading a photo or scan of a receipt. Return ONLY valid JSON, no extra text, in exactly this shape:\n\n{\n  \"merchant\": \"store or business name\",\n  \"receipt_date\": \"YYYY-MM-DD\",\n  \"total\": 0.00,\n  \"tax\": 0.00,\n  \"category\": \"Meals | Office Supplies | Fuel/Transport | Utilities | Software | Marketing | Other\"\n}\n\nRules:\n- total is the final amount paid, including tax and tip.\n- If a value cannot be read clearly, use null. Do not guess.\n- Dates must be YYYY-MM-DD.",
+        "inputType": "binary",
+        "binaryPropertyName": "attachment_0",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        448,
+        -96
+      ],
+      "id": "beba8ba2-7606-4b6f-bc42-823af707622d",
+      "name": "Analyze an image",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "Bhpkv4lLDtiRnmNg",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = $json.content?.parts?.[0]?.text ?? $json.text ?? $json.output ?? '';\nconst clean = String(raw).replace(/```json|```/g, '').trim();\n\nlet p;\ntry { p = JSON.parse(clean); } catch (e) { p = {}; }\n\nconst num = (v) => (v === null || v === undefined || v === '' ? NaN : Number(v));\nconst total = num(p.total);\nconst tax = num(p.tax);\nconst dateOk = /^\\d{4}-\\d{2}-\\d{2}$/.test(p.receipt_date || '');\nconst categories = ['Meals', 'Office Supplies', 'Fuel/Transport', 'Utilities', 'Software', 'Marketing', 'Other'];\n\nconst problems = [];\nif (!p.merchant) problems.push('merchant not found');\nif (!isFinite(total) || total <= 0) problems.push('total not readable');\nif (!dateOk) problems.push('date not readable');\n\nconst mail = $('Gmail Trigger').item.json;\n\nreturn { json: {\n  receipt_date: dateOk ? p.receipt_date : '',\n  merchant: p.merchant || '',\n  total: isFinite(total) ? total : '',\n  tax: isFinite(tax) ? tax : '',\n  category: categories.includes(p.category) ? p.category : 'Other',\n  status: problems.length ? 'NEEDS REVIEW' : 'OK',\n  note: problems.join('; '),\n  email_subject: mail.subject || mail.Subject || '',\n} };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        -96
+      ],
+      "id": "de4dddc7-d83f-4e41-9d6a-5081025b62f3",
+      "name": "Parse Receipt"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1fy_fj2qSPJETBzIFNQkHyLh1ktrZNwdvLGOkma_wvus",
+          "mode": "list",
+          "cachedResultName": "Expense Tracker",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1fy_fj2qSPJETBzIFNQkHyLh1ktrZNwdvLGOkma_wvus/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Expenses",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1fy_fj2qSPJETBzIFNQkHyLh1ktrZNwdvLGOkma_wvus/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "receipt_date",
+              "displayName": "receipt_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "merchant",
+              "displayName": "merchant",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "total",
+              "displayName": "total",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tax",
+              "displayName": "tax",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "note",
+              "displayName": "note",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email_subject",
+              "displayName": "email_subject",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        896,
+        -96
+      ],
+      "id": "a811631e-2cf3-442b-b486-9444313c01b2",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Qi5oTwrxHjdQeVpP",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        240
+      ],
+      "id": "d63fc0dd-b56b-48cd-b29a-2ac0c356b2f6",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1fy_fj2qSPJETBzIFNQkHyLh1ktrZNwdvLGOkma_wvus",
+          "mode": "list",
+          "cachedResultName": "Expense Tracker",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1fy_fj2qSPJETBzIFNQkHyLh1ktrZNwdvLGOkma_wvus/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Expenses",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1fy_fj2qSPJETBzIFNQkHyLh1ktrZNwdvLGOkma_wvus/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        240
+      ],
+      "id": "f7a066a0-e828-4ded-92d9-e76320060d12",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Qi5oTwrxHjdQeVpP",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const LOOKBACK_DAYS = 30;   // use 30 while testing\nconst zone = $now.zoneName;\nconst since = $now.startOf('day').minus({ days: LOOKBACK_DAYS });\n\nconst all = $input.all().map(i => i.json);\nconst needsReview = all.filter(r => r.status === 'NEEDS REVIEW').length;\n\nconst rows = all\n  .filter(r => r.status === 'OK' && r.receipt_date)\n  .map(r => ({\n    merchant: r.merchant,\n    category: r.category || 'Other',\n    amount: Number(r.total) || 0,\n    d: DateTime.fromISO(String(r.receipt_date).trim(), { zone }),\n  }))\n  .filter(r => r.d.isValid && r.d >= since);\n\nif (rows.length === 0) return [];\n\nconst byCat = {};\nlet total = 0;\nfor (const r of rows) {\n  total += r.amount;\n  byCat[r.category] = (byCat[r.category] || 0) + r.amount;\n}\nconst biggest = rows.reduce((a, b) => (b.amount > a.amount ? b : a));\n\nconst categories = Object.entries(byCat)\n  .sort((a, b) => b[1] - a[1])\n  .map(([c, v]) => `${c}: ${v.toFixed(2)}`)\n  .join('\\n');\n\nreturn [{ json: {\n  period: `${since.toISODate()} to ${$now.toISODate()}`,\n  count: rows.length,\n  total: total.toFixed(2),\n  categories,\n  biggest: `${biggest.merchant} (${biggest.amount.toFixed(2)})`,\n  needsReview,\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        240
+      ],
+      "id": "fc933ed0-02ea-4b5a-9c63-21edb6582ce9",
+      "name": "Weekly Totals"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a bookkeeping assistant for a small business owner. Write a short, friendly weekly spending summary (plain text, max 100 words) from the data below. Mention the biggest category and one practical observation. If receipts need review, remind the owner to check them. Output only the email body, no subject line. Do not invent numbers.\n\nPeriod: {{ $json.period }}\nReceipts: {{ $json.count }}\nTotal spent: {{ $json.total }}\nBy category:\n{{ $json.categories }}\nBiggest expense: {{ $json.biggest }}\nReceipts needing review: {{ $json.needsReview }}",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        672,
+        240
+      ],
+      "id": "1bd93902-4513-457e-8e92-f45d1ce8f154",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        608,
+        448
+      ],
+      "id": "e4ac645e-f9ac-457c-9006-d8379c76bdfd",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "Bhpkv4lLDtiRnmNg",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "taningcoharvey@gmail.com",
+        "subject": "Weekly spending summary",
+        "message": "={{ $json.text.replace(/\\n/g, '<br>') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1040,
+        240
+      ],
+      "id": "485fc44e-73ae-4721-97b9-f546f3ff12aa",
+      "name": "Send a message",
+      "webhookId": "5699ff6a-ec14-4842-a6c0-cd1fa19f5f1e",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "aMAYtG7Jyxbl3kYY",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Analyze an image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze an image": {
+      "main": [
+        [
+          {
+            "node": "Parse Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Receipt": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Weekly Totals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekly Totals": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "G93WGSSkA36N7bZB",
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": -1,
+    "availableInMCP": false
+  },
+  "versionId": "0aaf8a4b-c7a4-4682-8294-c352b9359257",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "3d7ddd6259511cb8b1a09df6983c661d00f50e096914ec0c4545bd0de57f2e8d"
+  },
+  "nodeGroups": [],
+  "id": "gRfYCXiMRIRcmgWa",
+  "tags": []
+}
